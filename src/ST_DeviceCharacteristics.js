@@ -86,7 +86,7 @@ module.exports = class DeviceCharacteristics {
 
     air_purifier(_accessory, _service) {
         let actState = (_accessory.context.deviceData.attributes.switch === "on") ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE;
-        let c = this.getOrAddService(_service).getCharacteristic(Characteristic.Active);
+        let c = _accessory.getOrAddService(_service).getCharacteristic(Characteristic.Active);
         if (!c.events.get || !c.events.set) {
             if (!c.events.get) {
                 c.on('get', (callback) => {
@@ -104,7 +104,7 @@ module.exports = class DeviceCharacteristics {
             c.updateValue(actState);
         }
 
-        c = this.getaddService(_service).getCharacteristic(Characteristic.CurrentAirPurifierState);
+        c = _accessory.getOrAddService(_service).getCharacteristic(Characteristic.CurrentAirPurifierState);
         let apState = (actState === Characteristic.Active.INACTIVE) ? Characteristic.CurrentAirPurifierState.INACTIVE : Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
         if (!c.events.get) {
             c.on('get', (callback) => {
@@ -113,7 +113,7 @@ module.exports = class DeviceCharacteristics {
         }
         c.updateValue(apState);
 
-        c = this.getaddService(CommunityTypes.NewAirPurifierService).getCharacteristic(CommunityTypes.FanOscilationMode);
+        c = _accessory.getOrAddService(CommunityTypes.NewAirPurifierService).getCharacteristic(CommunityTypes.FanOscilationMode);
         if (!c.events.get || !c.events.set) {
             if (!c.events.get) {
                 c.on('get', (callback) => {

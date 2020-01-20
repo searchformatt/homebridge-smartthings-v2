@@ -11,7 +11,7 @@ String platform()                       { return "SmartThings" }
 String pluginName()                     { return "${platform()}-v2" }
 String appIconUrl()                     { return "https://raw.githubusercontent.com/tonesto7/homebridge-smartthings-v2/${branch()}/images/hb_tonesto7@2x.png" }
 String getAppImg(imgName, ext=".png")   { return "https://raw.githubusercontent.com/tonesto7/homebridge-smartthings-v2/${branch()}/images/${imgName}${ext}" }
-Map minVersions()                       { return [plugin: 210] }
+Map minVersions()                       { return [plugin: 221] }
 
 definition(
     name: "Homebridge v2",
@@ -160,9 +160,11 @@ def mainPage() {
     }
 }
 
+
 def defineDevicesPage() {
     return dynamicPage(name: "defineDevicesPage", title: "", install: false, uninstall: false) {
         section("Define Specific Categories:") {
+            paragraph "NOTE: Please do not select a device here and then again in another input below."
             paragraph "Each category below will adjust the device attributes to make sure they are recognized as the desired device type under HomeKit", state: "complete"
             input "lightList", "capability.switch", title: "Lights: (${lightList ? lightList?.size() : 0} Selected)", multiple: true, submitOnChange: true, required: false, image: getAppImg("light_on")
             input "buttonList", "capability.button", title: "Buttons: (${buttonList ? buttonList?.size() : 0} Selected)", multiple: true, submitOnChange: true, required: false, image: getAppImg("button")
@@ -207,6 +209,76 @@ private resetAppToken() {
     if(getAccessToken()) {
         log.info "resetAppToken | New Access Token Created..."
     }
+}
+
+private resetCapFilters() {
+    List items = settings?.each?.findAll { it?.key?.startsWith("remove") }?.collect { it?.key as String }
+    if(items?.size()) {
+        items?.each { item->
+            settingRemove(item)
+        }
+    }
+}
+
+private deviceInputCleanup(key, cap, itemsToRmv=[]) {
+
+}
+
+private duplicateCheck() {
+    Map result = [d: false, o: false]
+    Map clnUp = [d: [:], o: [:]]
+    Map items = [
+        d: ["fanList": "switch", "fan3SpdList": "switch", "fan4SpdList": "switch", "buttonList": "button", "lightList": "switch", "shadesList": "windowShade", "speakerList": "switch"],
+        o: ["deviceList": "refresh", "sensorList": "sensor", "switchList": "switch"]
+    ]
+    items?.d?.each { k, v->
+        List priItems = (settings?."${k}"?.size()) ? settings?."${k}"?.collect { it?.id } : null
+        if(priItems) {
+            items?.d?.each { k2, v2->
+                List secItems = (settings?."${k2}"?.size()) ? settings?."${k2}"?.collect { it?.id } : null
+                if(k != k2 && secItems) {
+                    secItems?.retainAll(priItems)
+                    if(secItems?.size()) {
+                        result?.d = true
+                        clnUp?.d[k2] = clnUp?.d[k2] ?: []
+                        clnUp?.d[k2] = (clnUp?.d[k2] + secItems)?.unique()
+                    }
+                }
+            }
+
+            items?.o?.each { k2, v2->
+                List secItems = (settings?."${k2}"?.size()) ? settings?."${k2}"?.collect { it?.id } : null
+                if(secItems) {
+                    secItems?.retainAll(priItems)
+                    if(secItems?.size()) {
+                        result?.o = true
+                        clnUp?.o[k2] = clnUp?.o[k2] ?: []
+                        clnUp?.o[k2] = (clnUp?.o[k2] + secItems)?.unique()
+                    }
+                }
+            }
+        }
+    }
+    if(clnUp?.d?.size()) {
+        clnUp?.d?.each { k,v->
+            def s = settings?."${k}"?.collect { it?.id }
+            if(s) {
+                s?.removeAll(v)
+                settingUpdate(k, s, "capability.${items.d[k]}")
+            }
+        }
+    }
+    if(clnUp?.o?.size()) {
+        clnUp?.o?.each { k,v->
+            def s = settings?."${k}"?.collect { it?.id }
+            if(s) {
+                s?.removeAll(v)
+                settingUpdate(k, s, "capability.${items.o[k]}")
+            }
+        }
+    }
+    log.debug "result: ${result}"
+    log.debug "clnUp: ${clnUp}"
 }
 
 String getSetDesc() {
@@ -259,6 +331,10 @@ def capFilterPage() {
             input "removeTemp", "capability.temperatureMeasurement", title: "Remove Temperature from these Devices", multiple: true, submitOnChange: true, required: false, image: getAppImg("temperature")
             input "removeValve", "capability.valve", title: "Remove Valve from these Devices", multiple: true, submitOnChange: true, required: false, image: getAppImg("valve")
         }
+        section("Filter Reset:", hideable: true, hidden: true) {
+            input "resetCapFilters", "bool", title: "Clear All Selected Removal Filters?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("reset")
+            if(settings?.resetCapFilters) { settingUpdate("resetCapFilters", "false", "bool"); resetCapFilters() }
+        }
     }
 }
 
@@ -297,6 +373,11 @@ def donationPage() {
 
 def confirmPage() {
     return dynamicPage(name: "confirmPage", title: "Confirmation Page", install: true, uninstall:true) {
+        if(duplicateCheck()) {
+            section("Duplicate Device Selection Cleanup:") {
+                paragraph "Duplicate devices were found selected in one of the device type specific Categories and under one of the Other Devices inputs.\nI've cleaned them up for you!"
+            }
+        }
         section() {
             paragraph "Restarting the service is no longer required to apply any device changes under homekit.\n\nThe service will refresh your devices about 15-20 seconds after Pressing Done/Save.", state: "complete", image: getAppImg("info")
         }
